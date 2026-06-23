@@ -33,6 +33,9 @@
     pointer-events: none; line-height: 1.5;
   }
   #hud b { color: var(--text); font-weight: 600; }
+  #hud #credit { display: inline-block; margin-top: 9px; pointer-events: auto; color: var(--muted); text-decoration: none; transition: color .12s; }
+  #hud #credit:hover { color: var(--text); }
+  #hud #credit b { color: var(--accent); font-weight: 600; }
   #hud kbd {
     font-family: inherit; font-size: 11px; color: var(--text);
     background: rgba(255,255,255,0.1); border: 1px solid var(--line);
@@ -183,7 +186,8 @@
     <div id="hud">
       <b>Flag Studio — 3D Waving Flags</b><br />
       drag to orbit · scroll to zoom · <kbd>P</kbd> parameters · <kbd>C</kbd> camera rig<br />
-      <span id="genstat">loading flag…</span>
+      <span id="genstat">loading flag…</span><br />
+      <a id="credit" href="https://herve.paris/" target="_blank" rel="noopener">Experimentation tool made by <b>Hervé Studio</b></a>
     </div>
 
     <div id="pip-label">📷 Camera view</div>
@@ -422,7 +426,8 @@
       <div class="hint">“All flags” fetches every nation’s flag and packs them into one zip. The render captures exactly what you see, at canvas resolution.</div>
     </div>
 
-    <div class="foot">Vertex-shader cloth · analytic normals · World Cup 2026 nations.</div>
+    <div class="foot">Vertex-shader cloth · analytic normals · World Cup 2026 nations.<br />
+      Experimentation tool made by <a href="https://herve.paris/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Hervé Studio</a>.</div>
   </aside>
 </div>
 
