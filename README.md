@@ -2,7 +2,9 @@
 
 A single-file, in-browser 3D studio that renders **cloth-simulated waving flags** for all 48 FIFA World Cup 2026 nations — with live wind controls, PBR fabric, and one-click PNG / ZIP export.
 
-Forked from the [Soccer Ball — 3D Texture Studio](../football-visualizer), keeping its team picker, lighting rig, and export plumbing — but the soccer ball is replaced by a flag on a pole.
+**Live demo:** https://hervestudio.github.io/flag-studio/
+
+Forked from the Soccer Ball — 3D Texture Studio, keeping its team picker, lighting rig, and export plumbing — but the soccer ball is replaced by a flag on a pole.
 
 ## What it does
 
