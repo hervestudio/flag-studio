@@ -35,11 +35,11 @@
   #hud b { color: var(--text); font-weight: 600; }
   #credit {
     position: absolute; left: 18px; bottom: 16px; z-index: 6;
-    font-size: 11px; color: var(--muted); text-decoration: none; letter-spacing: .2px;
-    transition: color .12s;
+    font-size: 11px; color: var(--muted); letter-spacing: .2px;
+    pointer-events: none;                       /* only the link is interactive */
   }
-  #credit:hover { color: var(--text); }
-  #credit b { color: var(--accent); font-weight: 600; }
+  #credit a { color: var(--accent); font-weight: 600; text-decoration: none; pointer-events: auto; transition: color .12s; }
+  #credit a:hover { color: var(--text); }
   #hud kbd {
     font-family: inherit; font-size: 11px; color: var(--text);
     background: rgba(255,255,255,0.1); border: 1px solid var(--line);
@@ -193,7 +193,7 @@
       <span id="genstat">loading flag…</span>
     </div>
 
-    <a id="credit" href="https://herve.paris/" target="_blank" rel="noopener">Experimentation tool made by <b>Hervé Studio</b></a>
+    <div id="credit">Experimentation tool made by <a href="https://herve.paris/" target="_blank" rel="noopener">Hervé Studio ↗</a></div>
 
     <div id="pip-label">📷 Camera view</div>
     <div id="edit-banner"><b>Camera rig</b> — <kbd>G</kbd> move · <kbd>R</kbd> rotate (camera &amp; flag) · drag the green dot to re-aim · <kbd>C</kbd> to exit</div>
@@ -432,7 +432,7 @@
     </div>
 
     <div class="foot">Vertex-shader cloth · analytic normals · World Cup 2026 nations.<br />
-      Experimentation tool made by <a href="https://herve.paris/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Hervé Studio</a>.</div>
+      Experimentation tool made by <a href="https://herve.paris/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Hervé Studio ↗</a></div>
   </aside>
 </div>
 
