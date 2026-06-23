@@ -33,9 +33,13 @@
     pointer-events: none; line-height: 1.5;
   }
   #hud b { color: var(--text); font-weight: 600; }
-  #hud #credit { display: inline-block; margin-top: 9px; pointer-events: auto; color: var(--muted); text-decoration: none; transition: color .12s; }
-  #hud #credit:hover { color: var(--text); }
-  #hud #credit b { color: var(--accent); font-weight: 600; }
+  #credit {
+    position: absolute; left: 18px; bottom: 16px; z-index: 6;
+    font-size: 11px; color: var(--muted); text-decoration: none; letter-spacing: .2px;
+    transition: color .12s;
+  }
+  #credit:hover { color: var(--text); }
+  #credit b { color: var(--accent); font-weight: 600; }
   #hud kbd {
     font-family: inherit; font-size: 11px; color: var(--text);
     background: rgba(255,255,255,0.1); border: 1px solid var(--line);
@@ -186,9 +190,10 @@
     <div id="hud">
       <b>Flag Studio — 3D Waving Flags</b><br />
       drag to orbit · scroll to zoom · <kbd>P</kbd> parameters · <kbd>C</kbd> camera rig<br />
-      <span id="genstat">loading flag…</span><br />
-      <a id="credit" href="https://herve.paris/" target="_blank" rel="noopener">Experimentation tool made by <b>Hervé Studio</b></a>
+      <span id="genstat">loading flag…</span>
     </div>
+
+    <a id="credit" href="https://herve.paris/" target="_blank" rel="noopener">Experimentation tool made by <b>Hervé Studio</b></a>
 
     <div id="pip-label">📷 Camera view</div>
     <div id="edit-banner"><b>Camera rig</b> — <kbd>G</kbd> move · <kbd>R</kbd> rotate (camera &amp; flag) · drag the green dot to re-aim · <kbd>C</kbd> to exit</div>
