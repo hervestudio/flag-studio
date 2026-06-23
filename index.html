@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flag Studio — 3D Waving Flags</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='15'>%F0%9F%8F%B3%EF%B8%8F</text></svg>" />
+<style>
+  :root {
+    --bg: #0e0f13;
+    --panel: #16181f;
+    --panel-2: #1d2029;
+    --line: #2a2e3a;
+    --text: #e7e9ee;
+    --muted: #8a91a3;
+    --accent: #5b8cff;
+    --accent-2: #36d399;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+  }
+  #app { display: flex; height: 100vh; }
+  #view { position: relative; flex: 1 1 auto; min-width: 0; }
+  #view canvas { display: block; }
+  #hud {
+    position: absolute; top: 16px; left: 16px;
+    font-size: 12px; color: var(--muted);
+    pointer-events: none; line-height: 1.5;
+  }
+  #hud b { color: var(--text); font-weight: 600; }
+  #hud kbd {
+    font-family: inherit; font-size: 11px; color: var(--text);
+    background: rgba(255,255,255,0.1); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px;
+  }
+  #app.panel-hidden #panel { display: none; }
+
+  /* picture-in-picture label + camera-rig banner (shown only in camera-rig mode) */
+  #pip-label, #edit-banner { position: absolute; display: none; z-index: 7; pointer-events: none; }
+  #pip-label {
+    top: 14px; right: 14px;
+    font-size: 11px; font-weight: 600; color: var(--text);
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px; padding: 3px 8px;
+  }
+  #edit-banner {
+    top: 16px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: var(--muted); line-height: 1.5; text-align: center;
+    background: rgba(18,20,26,0.7); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; padding: 7px 14px; backdrop-filter: blur(10px);
+  }
+  #edit-banner b { color: var(--accent); }
+  #edit-banner kbd, #hud kbd { font-family: inherit; }
+  #app.editing #pip-label, #app.editing #edit-banner { display: block; }
+
+  /* ---- floating team picker ---- */
+  #teambar {
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    width: min(900px, calc(100% - 48px));
+    background: rgba(18, 20, 26, 0.66);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    padding: 12px 14px 13px;
+    display: flex; flex-direction: column; gap: 11px;
+    z-index: 6;
+  }
+  #teambar-tabs { display: flex; align-items: center; gap: 4px; }
+  #teambar-groups { display: flex; gap: 2px; flex-wrap: wrap; min-width: 0; }
+  .tab {
+    background: none; border: none; color: var(--muted);
+    font-size: 11.5px; font-weight: 500; letter-spacing: .2px;
+    padding: 5px 11px; border-radius: 9px; cursor: pointer; transition: .12s; white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+  .tab.active { color: #06122e; background: var(--accent); }
+  #teamsearch {
+    margin-left: auto; flex: 0 0 auto;
+    background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line);
+    border-radius: 9px; padding: 6px 11px; color: var(--text); font-size: 12px; width: 132px;
+    transition: .12s;
+  }
+  #teamsearch::placeholder { color: #6b7282; }
+  #teamsearch:focus { outline: none; border-color: var(--accent); width: 160px; }
+
+  #teambar-chips {
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 3px;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent;
+    scroll-behavior: smooth;
+  }
+  #teambar-chips::-webkit-scrollbar { height: 7px; }
+  #teambar-chips::-webkit-scrollbar-track { background: transparent; }
+  #teambar-chips::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 4px; }
+  .chip {
+    position: relative; flex: 0 0 auto;
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 13px; border-radius: 12px;
+    background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line);
+    color: var(--text); font-size: 12.5px; font-weight: 500; white-space: nowrap;
+    cursor: pointer; transition: transform .1s, background .12s, border-color .12s;
+  }
+  .chip:hover { background: rgba(255, 255, 255, 0.09); transform: translateY(-1px); }
+  .chip.active { border-color: var(--accent); background: rgba(91, 140, 255, 0.18); }
+  .chip .flag { font-size: 16px; line-height: 1; }
+  .chip-hidden { display: none; }
+
+  #panel {
+    width: 320px; flex: 0 0 320px;
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .head { padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+  .head h1 { margin: 0; font-size: 15px; letter-spacing: .2px; }
+  .head p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+
+  .section { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .section h2 {
+    margin: 0 0 12px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--muted); font-weight: 600;
+  }
+
+  .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  .row label { font-size: 13px; color: var(--text); }
+  .row .val { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  input[type="range"] { width: 140px; accent-color: var(--accent); }
+  input[type="color"] {
+    width: 34px; height: 24px; border: 1px solid var(--line); border-radius: 6px;
+    background: none; padding: 0; cursor: pointer;
+  }
+  select {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 8px; font-size: 13px;
+  }
+
+  input.cam {
+    flex: 1 1 0; min-width: 0; width: 100%;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 8px; font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+  input.cam:focus { outline: none; border-color: var(--accent); }
+
+  .switch { display: inline-flex; gap: 6px; }
+  .switch button {
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    padding: 5px 10px; font-size: 12px; border-radius: 6px; cursor: pointer;
+  }
+  .switch button.active { color: var(--text); border-color: var(--accent); background: #1a2236; }
+
+  .preview { display: flex; flex-direction: column; gap: 6px; }
+  .preview canvas {
+    width: 100%; aspect-ratio: 3 / 2; border-radius: 8px; border: 1px solid var(--line);
+    background: #000; image-rendering: auto; box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  }
+  .preview .cap { font-size: 11px; color: var(--muted); text-align: center; }
+
+  .btns { display: flex; flex-direction: column; gap: 8px; }
+  button.act {
+    width: 100%; padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    font-size: 13px; font-weight: 500; transition: .12s;
+  }
+  button.act:hover { border-color: var(--accent); }
+  button.act.primary { background: var(--accent); border-color: var(--accent); color: #06122e; font-weight: 600; }
+  button.act.primary:hover { filter: brightness(1.08); }
+
+  .hint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .foot { padding: 14px 18px; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="app" class="panel-hidden">
+  <div id="view">
+    <div id="hud">
+      <b>Flag Studio — 3D Waving Flags</b><br />
+      drag to orbit · scroll to zoom · <kbd>P</kbd> parameters · <kbd>C</kbd> camera rig<br />
+      <span id="genstat">loading flag…</span>
+    </div>
+
+    <div id="pip-label">📷 Camera view</div>
+    <div id="edit-banner"><b>Camera rig</b> — <kbd>G</kbd> move · <kbd>R</kbd> rotate (camera &amp; flag) · drag the green dot to re-aim · <kbd>C</kbd> to exit</div>
+
+    <div id="teambar">
+      <div id="teambar-tabs">
+        <div id="teambar-groups"></div>
+        <input id="teamsearch" type="text" placeholder="Search team…" autocomplete="off" spellcheck="false" />
+      </div>
+      <div id="teambar-chips"></div>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <div class="head">
+      <h1>🏳️ Flag Studio</h1>
+      <p>Cloth-simulated waving flags · 48 nations · PNG export</p>
+    </div>
+
+    <div class="section">
+      <h2>Current flag</h2>
+      <div class="preview">
+        <canvas class="thumb" id="thumb-flag" title="Click to download"></canvas>
+        <div class="cap" id="flag-name">—</div>
+      </div>
+      <div class="btns" style="margin-top:10px">
+        <button class="act" id="dl-normal">Download fabric normal map</button>
+      </div>
+      <div class="hint">Click the preview to download this flag image.</div>
+    </div>
+
+    <div class="section">
+      <h2>Wind</h2>
+      <div class="row">
+        <label>Strength</label>
+        <input type="range" id="amp" min="0" max="0.5" step="0.01" value="0.39" />
+        <span class="val" id="amp-v">0.39</span>
+      </div>
+      <div class="row">
+        <label>Speed</label>
+        <input type="range" id="speed" min="0" max="6" step="0.1" value="1.8" />
+        <span class="val" id="speed-v">1.8</span>
+      </div>
+      <div class="row">
+        <label>Ripple detail</label>
+        <input type="range" id="turb" min="0" max="1.5" step="0.05" value="0.85" />
+        <span class="val" id="turb-v">0.85</span>
+      </div>
+      <div class="row">
+        <label>Frequency</label>
+        <input type="range" id="freq" min="0.3" max="2.5" step="0.05" value="1.65" />
+        <span class="val" id="freq-v">1.65</span>
+      </div>
+      <div class="row">
+        <label>Curl</label>
+        <input type="range" id="droop" min="0" max="0.8" step="0.02" value="0.36" />
+        <span class="val" id="droop-v">0.36</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Flag</h2>
+      <div class="row">
+        <label>Proportion</label>
+        <select id="ratio">
+          <option value="1.5">3 : 2</option>
+          <option value="1.6667" selected>5 : 3</option>
+          <option value="2.0">2 : 1</option>
+          <option value="1.3333">4 : 3</option>
+          <option value="0.6667">2 : 3 (vertical)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Flagpole</label>
+        <div class="switch" id="pole-mode">
+          <button data-pole="1">On</button>
+          <button data-pole="0" class="active">Off</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Auto-orbit</label>
+        <div class="switch" id="spin-mode">
+          <button data-spin="1">On</button>
+          <button data-spin="0" class="active">Off</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Extend (fill)</label>
+        <input type="range" id="extend" min="1" max="4" step="0.1" value="1" />
+        <span class="val" id="extend-v">1.0×</span>
+      </div>
+      <div class="hint">Grows the cloth past its edges (bands continue outward) so the frame fills with flag instead of black.</div>
+    </div>
+
+    <div class="section">
+      <h2>Fabric</h2>
+      <div class="row">
+        <label>Roughness</label>
+        <input type="range" id="rough" min="0" max="1" step="0.05" value="0.65" />
+        <span class="val" id="rough-v">0.65</span>
+      </div>
+      <div class="row">
+        <label>Sheen</label>
+        <input type="range" id="env" min="0" max="2" step="0.05" value="0.95" />
+        <span class="val" id="env-v">0.95</span>
+      </div>
+      <div class="row">
+        <label>Weave normal</label>
+        <input type="range" id="strength" min="0" max="3" step="0.1" value="1.1" />
+        <span class="val" id="strength-v">1.1</span>
+      </div>
+      <div class="row">
+        <label>Weave scale</label>
+        <input type="range" id="weaveScale" min="0.3" max="3" step="0.05" value="0.65" />
+        <span class="val" id="weaveScale-v">0.65</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Environment</h2>
+      <div class="row">
+        <label>HDRI</label>
+        <select id="hdri">
+          <option value="room">Studio (procedural)</option>
+          <option value="studio_small_09" selected>Studio softbox</option>
+          <option value="royal_esplanade">Royal esplanade</option>
+          <option value="venice_sunset">Venice sunset</option>
+          <option value="symmetrical_garden_02">Garden</option>
+          <option value="kloofendal_48d_partly_cloudy_puresky">Open sky</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Rotation</label>
+        <input type="range" id="envRot" min="0" max="360" step="1" value="0" />
+        <span class="val" id="envRot-v">0°</span>
+      </div>
+      <div class="row">
+        <label>Show as backdrop</label>
+        <div class="switch" id="bgmode">
+          <button data-bg="0" class="active">Off</button>
+          <button data-bg="1">On</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Lighting</h2>
+      <div class="row">
+        <label>Light angle</label>
+        <input type="range" id="lightAz" min="0" max="360" step="1" value="182" />
+        <span class="val" id="lightAz-v">182°</span>
+      </div>
+      <div class="row">
+        <label>Light height</label>
+        <input type="range" id="lightEl" min="-80" max="85" step="1" value="16" />
+        <span class="val" id="lightEl-v">16°</span>
+      </div>
+      <div class="row">
+        <label>Key intensity</label>
+        <input type="range" id="lightInt" min="0" max="6" step="0.1" value="1.1" />
+        <span class="val" id="lightInt-v">1.1</span>
+      </div>
+      <div class="row">
+        <label>Ambient fill</label>
+        <input type="range" id="ambient" min="0" max="1.5" step="0.05" value="0.20" />
+        <span class="val" id="ambient-v">0.20</span>
+      </div>
+      <div class="row">
+        <label>Background</label>
+        <input type="color" id="bg" value="#0e0f13" />
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Camera</h2>
+      <div class="row">
+        <label>Focal length</label>
+        <input type="range" id="focal" min="18" max="200" step="1" value="21" />
+        <span class="val" id="focal-v">21mm</span>
+      </div>
+      <div class="row">
+        <label>Depth of field</label>
+        <div class="switch" id="dof-mode">
+          <button data-dof="0">Off</button>
+          <button data-dof="1" class="active">On</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Aperture</label>
+        <input type="range" id="aperture" min="0" max="10" step="0.1" value="10.0" />
+        <span class="val" id="aperture-v">10.0</span>
+      </div>
+      <div class="row">
+        <label>Focus</label>
+        <div class="switch" id="focus-mode">
+          <button data-focus="auto">Auto</button>
+          <button data-focus="manual" class="active">Manual</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Focus distance</label>
+        <input type="range" id="focusDist" min="0.5" max="15" step="0.1" value="1.7" />
+        <span class="val" id="focusDist-v">1.7</span>
+      </div>
+      <div class="hint">Double-click the flag to set the focus point there. “Auto” keeps the camera’s aim point in focus.</div>
+      <div class="row">
+        <label>Position X / Y / Z</label>
+      </div>
+      <div class="row" style="margin-top:-6px">
+        <input class="cam" id="cam-px" type="number" step="0.05" />
+        <input class="cam" id="cam-py" type="number" step="0.05" />
+        <input class="cam" id="cam-pz" type="number" step="0.05" />
+      </div>
+      <div class="row">
+        <label>Target X / Y / Z</label>
+      </div>
+      <div class="row" style="margin-top:-6px">
+        <input class="cam" id="cam-tx" type="number" step="0.05" />
+        <input class="cam" id="cam-ty" type="number" step="0.05" />
+        <input class="cam" id="cam-tz" type="number" step="0.05" />
+      </div>
+      <div class="btns">
+        <button class="act" id="cam-copy">📋 Copy camera</button>
+      </div>
+      <div class="hint">Orbit to frame the shot, then copy — paste the values back to me and I’ll set them as the default.</div>
+    </div>
+
+    <div class="section">
+      <h2>Export</h2>
+      <div class="btns">
+        <button class="act primary" id="dl-render">📸 Download render (.png)</button>
+        <button class="act" id="dl-flag">Flag image (.png)</button>
+        <button class="act" id="dl-all">All flags (.zip)</button>
+      </div>
+      <div class="hint">“All flags” fetches every nation’s flag and packs them into one zip. The render captures exactly what you see, at canvas resolution.</div>
+    </div>
+
+    <div class="foot">Vertex-shader cloth · analytic normals · World Cup 2026 nations.</div>
+  </aside>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ---------------------------------------------------------------------------
+   1. Teams — the 48-nation FIFA World Cup 2026 field, grouped by confederation.
+   Each entry: [name, emoji, ISO code] — the code drives the flag image lookup.
+--------------------------------------------------------------------------- */
+const TEAMS = {
+  'Hosts': [
+    ['United States', '🇺🇸', 'us'],
+    ['Mexico', '🇲🇽', 'mx'],
+    ['Canada', '🇨🇦', 'ca'],
+  ],
+  'Europe': [
+    ['France', '🇫🇷', 'fr'],
+    ['England', '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'gb-eng'],
+    ['Spain', '🇪🇸', 'es'],
+    ['Portugal', '🇵🇹', 'pt'],
+    ['Germany', '🇩🇪', 'de'],
+    ['Netherlands', '🇳🇱', 'nl'],
+    ['Belgium', '🇧🇪', 'be'],
+    ['Croatia', '🇭🇷', 'hr'],
+    ['Switzerland', '🇨🇭', 'ch'],
+    ['Austria', '🇦🇹', 'at'],
+    ['Norway', '🇳🇴', 'no'],
+    ['Scotland', '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'gb-sct'],
+    ['Bosnia and Herzegovina', '🇧🇦', 'ba'],
+    ['Sweden', '🇸🇪', 'se'],
+    ['Turkey', '🇹🇷', 'tr'],
+    ['Czechia', '🇨🇿', 'cz'],
+  ],
+  'South America': [
+    ['Brazil', '🇧🇷', 'br'],
+    ['Argentina', '🇦🇷', 'ar'],
+    ['Uruguay', '🇺🇾', 'uy'],
+    ['Colombia', '🇨🇴', 'co'],
+    ['Ecuador', '🇪🇨', 'ec'],
+    ['Paraguay', '🇵🇾', 'py'],
+  ],
+  'North & Central America': [
+    ['Panama', '🇵🇦', 'pa'],
+    ['Curaçao', '🇨🇼', 'cw'],
+    ['Haiti', '🇭🇹', 'ht'],
+  ],
+  'Africa': [
+    ['Morocco', '🇲🇦', 'ma'],
+    ['Senegal', '🇸🇳', 'sn'],
+    ['Egypt', '🇪🇬', 'eg'],
+    ['Algeria', '🇩🇿', 'dz'],
+    ['Ivory Coast', '🇨🇮', 'ci'],
+    ['Tunisia', '🇹🇳', 'tn'],
+    ['Ghana', '🇬🇭', 'gh'],
+    ['Cape Verde', '🇨🇻', 'cv'],
+    ['South Africa', '🇿🇦', 'za'],
+    ['DR Congo', '🇨🇩', 'cd'],
+  ],
+  'Asia': [
+    ['Japan', '🇯🇵', 'jp'],
+    ['Iran', '🇮🇷', 'ir'],
+    ['South Korea', '🇰🇷', 'kr'],
+    ['Australia', '🇦🇺', 'au'],
+    ['Saudi Arabia', '🇸🇦', 'sa'],
+    ['Jordan', '🇯🇴', 'jo'],
+    ['Uzbekistan', '🇺🇿', 'uz'],
+    ['Qatar', '🇶🇦', 'qa'],
+    ['Iraq', '🇮🇶', 'iq'],
+  ],
+  'Oceania': [
+    ['New Zealand', '🇳🇿', 'nz'],
+  ],
+};
+// name -> ISO code, for quick lookup
+const CODE = {};
+for (const list of Object.values(TEAMS)) for (const [name, , code] of list) CODE[name] = code;
+
+/* ---------------------------------------------------------------------------
+   2. Flag images. We render each nation's vector flag (flag-icons 4x3) to a
+   high-res canvas, then hand it to Three.js as a texture. A local _flags/<code>
+   .svg is used when present; otherwise we fetch from the flag-icons CDN.
+   Canvases are cached per code (and reused for the preview + zip export).
+--------------------------------------------------------------------------- */
+const FLAG_W = 1536, FLAG_H = 1024;          // 3:2 working canvas
+const CDN = code => `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`;
+
+async function fetchSvgText(code) {
+  // prefer a vendored copy, fall back to the CDN
+  try {
+    const r = await fetch(`_flags/${code}.svg`);
+    if (r.ok) return await r.text();
+  } catch (e) { /* not vendored */ }
+  const r = await fetch(CDN(code));
+  if (!r.ok) throw new Error(`flag ${code} ${r.status}`);
+  return await r.text();
+}
+
+const flagCache = new Map();                 // code -> Promise<canvas>
+function loadFlagCanvas(code) {
+  if (flagCache.has(code)) return flagCache.get(code);
+  const p = (async () => {
+    let svg = await fetchSvgText(code);
+    if (!/<svg[^>]*\swidth=/.test(svg)) svg = svg.replace('<svg', '<svg width="640" height="480"');
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const img = await new Promise((ok, er) => { const im = new Image(); im.onload = () => ok(im); im.onerror = er; im.src = url; });
+    URL.revokeObjectURL(url);
+    const cv = document.createElement('canvas'); cv.width = FLAG_W; cv.height = FLAG_H;
+    const ctx = cv.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, FLAG_W, FLAG_H);   // fill the 3:2 working canvas
+    return cv;
+  })();
+  flagCache.set(code, p);
+  return p;
+}
+
+/* ---------------------------------------------------------------------------
+   3. Three.js scene
+--------------------------------------------------------------------------- */
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(view.clientWidth, view.clientHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+view.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e0f13);
+
+const camera = new THREE.PerspectiveCamera(40, view.clientWidth / view.clientHeight, 0.1, 100);
+camera.position.set(0.2, 0.1, 5.2);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 2.0;
+controls.maxDistance = 12;
+controls.target.set(0, 0, 0);
+
+// ---- switchable / rotatable environment ----
+// 'room' is the procedural RoomEnvironment (works offline); the others are real
+// HDRIs from Poly Haven (PMREM-prefiltered for reflections, raw equirect for the
+// optional backdrop). Cached per name so re-selecting is instant.
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+const rgbe = new RGBELoader();
+const HDRI_URL = name => `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/${name}_1k.hdr`;
+let roomEnvTex = null;
+const envCache = new Map();        // name -> { env, bg }
+let curEnv = { env: null, bg: null };
+
+function getRoomEnv() {
+  if (!roomEnvTex) roomEnvTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  return roomEnvTex;
+}
+async function loadEnv(name) {
+  const prev = genstat.textContent;
+  genstat.textContent = 'loading environment…';
+  try {
+    if (name === 'room') curEnv = { env: getRoomEnv(), bg: null };
+    else if (envCache.has(name)) curEnv = envCache.get(name);
+    else {
+      const hdr = await rgbe.loadAsync(HDRI_URL(name));
+      const env = pmrem.fromEquirectangular(hdr).texture;
+      hdr.mapping = THREE.EquirectangularReflectionMapping;   // raw map for the backdrop
+      curEnv = { env, bg: hdr };
+      envCache.set(name, curEnv);
+    }
+    scene.environment = curEnv.env;
+    applyEnvRotation();
+    updateBackground();
+    genstat.textContent = currentName ? `${currentName} — flag ready` : prev;
+  } catch (e) {
+    console.error(e); genstat.textContent = 'environment failed (offline?)';
+  }
+}
+function applyEnvRotation() {
+  const r = ui.envRot * Math.PI / 180;
+  scene.environmentRotation.set(0, r, 0);
+  scene.backgroundRotation.set(0, r, 0);
+}
+function updateBackground() {
+  scene.background = (ui.bgShow && curEnv.bg) ? curEnv.bg : new THREE.Color(ui.bg);
+}
+
+const key = new THREE.DirectionalLight(0xffffff, 2.6); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9bb3ff, 1.0); rim.position.set(-4, 2, -3); scene.add(rim);
+const amb = new THREE.AmbientLight(0xffffff, 0.4); scene.add(amb);
+
+/* ---------------------------------------------------------------------------
+   4. The waving flag. A finely-tessellated plane whose vertices are displaced
+   along Z by a sum of travelling sine waves (amplitude growing from the pole
+   to the free edge). Normals are recomputed analytically in the vertex shader
+   so the cloth catches light correctly — full MeshStandardMaterial PBR, env
+   reflections and all. A team change sweeps the new texture across the cloth.
+--------------------------------------------------------------------------- */
+const WAVE_GLSL = `
+  uniform float uTime, uAmp, uFreq, uSpeed, uTurb, uDroop, uW, uH, uPole, uMix, uShock;
+  float flagH(vec2 p) {                       // p = uv, pole at p.x = 0
+    // amplitude envelope: anchored at the pole (uPole=1) or free cloth (uPole=0, used when extended)
+    float a = mix(1.0, pow(p.x, 1.25), uPole);
+    float h  = sin(p.x * uFreq * 6.2831 - uTime * uSpeed + p.y * 2.0);
+    h += 0.45 * sin(p.x * uFreq * 2.1 * 6.2831 - uTime * uSpeed * 1.3 + p.y * 4.0) * uTurb;
+    h += 0.22 * sin(p.x * uFreq * 3.7 * 6.2831 - uTime * uSpeed * 0.7 - p.y * 3.0) * uTurb;
+    float curl = -uDroop * smoothstep(0.35, 1.0, p.x);   // free edge curls forward
+    // travelling waveshock: a bump that rides the wipe edge left→right during a swap,
+    // so the cloth snaps out as the new flag passes, then settles behind it.
+    float soft = 0.18;
+    float edge = uMix * (1.0 + 2.0 * soft) - soft;       // same edge the colour wipe uses
+    float d = (p.x - edge) / 0.13;
+    float shock = uShock * exp(-d * d) * 0.22;
+    return a * uAmp * h + curl + shock;
+  }
+`;
+
+const blankTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+blankTex.needsUpdate = true;
+
+const flagUniforms = {
+  uTime:  { value: 0 },
+  uAmp:   { value: 0.39 },
+  uFreq:  { value: 1.65 },
+  uSpeed: { value: 1.8 },
+  uTurb:  { value: 0.85 },
+  uDroop: { value: 0.36 },
+  uW:     { value: 3.0 },
+  uH:     { value: 1.8 },
+  uPole:  { value: 1 },             // 1 = waves anchored at the pole; 0 = free cloth (extend mode)
+  // flag-swap wipe: the incoming flag's texture sweeps across the cloth
+  uMix:   { value: 0 },
+  uMap2:  { value: blankTex },
+  uExtend:{ value: 1 },             // texture repeat factor (extend mode) — used to normalise the wipe
+  uShock: { value: 0 },             // strength of the travelling waveshock during a swap
+};
+
+// ---- procedural woven-fabric normal map ----
+// A tileable plain-weave height field (over/under warp + weft threads, with a
+// little per-thread irregularity), converted to a tangent-space normal map and
+// tiled densely across the flag so the cloth reads as real woven fabric.
+function makeFabricNormalTex() {
+  const G = 512, P = 32;                       // tile px, thread pitch (→16 cells)
+  const h = new Float32Array(G * G);
+  const at = (x, y) => ((y + G) % G) * G + ((x + G) % G);   // wrapped index (tileable)
+  for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+    const cx = Math.floor(x / P), cy = Math.floor(y / P);
+    const bx = Math.sin(((x % P) / P) * Math.PI);  // rounded warp cross-section
+    const by = Math.sin(((y % P) / P) * Math.PI);  // rounded weft cross-section
+    const warpTop = ((cx + cy) & 1) === 0;         // plain-weave over/under
+    const iw = 0.90 + 0.10 * Math.sin(cx * 2.3);   // subtle per-thread variation
+    const ie = 0.90 + 0.10 * Math.sin(cy * 1.7);
+    const hw = bx * (warpTop ? 1.0 : 0.5) * iw;
+    const he = by * (warpTop ? 0.5 : 1.0) * ie;
+    h[y * G + x] = Math.max(hw, he);
+  }
+  const data = new Uint8ClampedArray(G * G * 4);
+  const S = 2.4;
+  for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+    const dx = (h[at(x + 1, y)] - h[at(x - 1, y)]) * S;
+    const dy = (h[at(x, y + 1)] - h[at(x, y - 1)]) * S;
+    let nx = -dx, ny = -dy, nz = 1;
+    const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    const o = (y * G + x) * 4;
+    data[o] = (nx * 0.5 + 0.5) * 255;
+    data[o + 1] = (ny * 0.5 + 0.5) * 255;
+    data[o + 2] = (nz * 0.5 + 0.5) * 255;
+    data[o + 3] = 255;
+  }
+  const cv = document.createElement('canvas'); cv.width = cv.height = G;
+  cv.getContext('2d').putImageData(new ImageData(data, G, G), 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+const fabricNormalTex = makeFabricNormalTex();
+function setWeaveDensity() {
+  // The 512px tile already holds 16 thread-pairs, so keep the repeat low — aim for
+  // ~120 threads up the flag's height (and proportionally across its width) so the
+  // weave reads as fabric without going sub-pixel and washing out in the mipmaps.
+  const ry = (120 / 16) / ui.weaveScale;        // repeats up the height (scale ↑ = larger weave)
+  fabricNormalTex.repeat.set(ry * flagUniforms.uW.value / flagUniforms.uH.value, ry);
+  fabricNormalTex.needsUpdate = true;
+}
+
+function makeFlagMat() {
+  const m = new THREE.MeshStandardMaterial({
+    roughness: 0.7, metalness: 0.0, side: THREE.DoubleSide,
+  });
+  m.envMapIntensity = 0.35;
+  m.normalMap = fabricNormalTex;
+  m.normalScale = new THREE.Vector2(1.1, 1.1);
+  m.onBeforeCompile = (shader) => {
+    for (const k in flagUniforms) shader.uniforms[k] = flagUniforms[k];
+    // ---- swap wipe: blend the current flag (map) into the incoming one (uMap2)
+    //      along a soft, wavy vertical line driven by uMix (0 → old, 1 → new) ----
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uMap2;\nuniform float uMix;\nuniform float uExtend;')
+      .replace('#include <map_fragment>', `
+        #ifdef USE_MAP
+          // soft wipe: a gradient band sweeps left→right as uMix goes 0→1
+          float wx = (vMapUv.x + (uExtend - 1.0) * 0.5) / uExtend;   // plane-space x, 0=left .. 1=right
+          float soft = 0.18;                                          // softness of the wipe edge
+          float edge = uMix * (1.0 + 2.0 * soft) - soft;
+          float w = 1.0 - smoothstep(edge - soft, edge + soft, wx);   // 1 = incoming flag
+          vec4 sampledDiffuseColor = mix(texture2D(map, vMapUv), texture2D(uMap2, vMapUv), w);
+          diffuseColor *= sampledDiffuseColor;
+        #endif
+      `);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n' + WAVE_GLSL)
+      .replace('#include <beginnormal_vertex>', `
+        #include <beginnormal_vertex>
+        {
+          float e = 0.0025;
+          float h0 = flagH(uv);
+          float dhx = (flagH(uv + vec2(e, 0.0)) - h0) / e / uW;
+          float dhy = (flagH(uv + vec2(0.0, e)) - h0) / e / uH;
+          objectNormal = normalize(vec3(-dhx, -dhy, 1.0));
+          #ifdef USE_TANGENT
+            objectTangent = vec3(1.0, 0.0, dhx);
+          #endif
+        }
+      `)
+      .replace('#include <begin_vertex>', `
+        #include <begin_vertex>
+        transformed.z += flagH(uv);
+      `);
+  };
+  return m;
+}
+
+let flagBaseW = 1.8 * 1.6667, flagBaseH = 1.8;
+let flagGeo = buildFlagGeo(1.6667, 1.0);
+function buildFlagGeo(ratio, ext) {
+  // world height fixed at ~1.8; width follows the chosen proportion. When extended,
+  // the plane grows by `ext` (the flag texture stays centred and its edge bands clamp
+  // outward to fill the frame) and the wave goes free (no pole anchor).
+  const H = 1.8, W = H * ratio;
+  flagBaseW = W; flagBaseH = H;
+  const pw = W * ext, ph = H * ext;
+  flagUniforms.uW.value = pw;
+  flagUniforms.uH.value = ph;
+  flagUniforms.uExtend.value = ext;
+  flagUniforms.uPole.value = ext > 1.0001 ? 0 : 1;
+  const segX = Math.min(420, Math.max(60, Math.round(120 * ratio * ext)));
+  const segY = Math.min(320, Math.round(120 * ext));
+  const g = new THREE.PlaneGeometry(pw, ph, segX, segY);
+  // shift by the BASE half-width so the flag centre stays at the same world spot
+  g.translate(W / 2, 0, 0);
+  return g;
+}
+
+const flag = new THREE.Mesh(flagGeo, makeFlagMat());
+const flagGroup = new THREE.Group();          // gets layout offset + presentation spin
+flagGroup.add(flag);
+
+// ---- flagpole: a static mast the flag hangs from (left edge) ----
+const poleMat = new THREE.MeshStandardMaterial({ color: 0x9aa3b2, roughness: 0.35, metalness: 0.9 });
+const pole = new THREE.Group();
+{
+  const H = 2.6;
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, H, 24), poleMat);
+  mast.position.y = H / 2 - 0.9;
+  const finial = new THREE.Mesh(new THREE.SphereGeometry(0.06, 24, 16), poleMat);
+  finial.position.y = mast.position.y + H / 2 + 0.02;
+  pole.add(mast, finial);
+}
+
+// flagPivot is the user-transformable root (moved/rotated by the rig gizmo); the
+// spin + layout live on flagGroup beneath it, so they don't fight a manual transform.
+const flagPivot = new THREE.Group();
+flagPivot.add(flagGroup, pole);
+scene.add(flagPivot);
+
+function layoutFlag() {
+  const W = flagBaseW;
+  // centre the flag+pole assembly on screen. The pivot sits at the pole edge (so the
+  // flag gizmo doesn't collide with the centre target handle, and rotation pivots on
+  // the pole); content hangs off it. Only reset X — keep any manual Y/Z/rotation.
+  flagPivot.position.x = -W / 2 - 0.06;
+  flagGroup.position.x = 0;
+  pole.position.x = -0.02;
+  pole.visible = ui.pole && ui.extend <= 1.0001;   // the pole would be buried when extended
+}
+
+function rebuildGeo() {
+  const g = buildFlagGeo(ui.ratio, ui.extend);
+  flagGeo.dispose();
+  flagGeo = g;
+  flag.geometry = g;
+  setWeaveDensity();
+  layoutFlag();
+}
+
+/* ---- apply a flag canvas as the colour map of a material ---- */
+// In extend mode the flag texture is repeated by `ui.extend` and recentred, with
+// clamp-to-edge wrapping so the flag's outer bands stretch out to fill the frame
+// (e.g. a tricolour's stripes continue) instead of showing black.
+function applyMapExtend(tex) {
+  if (!tex) return;
+  const k = ui.extend;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(k, k);
+  tex.offset.set(-(k - 1) / 2, -(k - 1) / 2);
+  tex.needsUpdate = true;
+}
+function makeTex(canvas) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  applyMapExtend(t);
+  return t;
+}
+let currentFlagCanvas = null;          // for the side-panel preview (redrawn when shown)
+
+// a neutral dark cloth shown instantly on load, so the flag is never blank/black
+// while the real one fetches — the first flag then wipes in over it.
+function makePlaceholderCanvas() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 42;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 42);
+  g.addColorStop(0, '#262b35'); g.addColorStop(1, '#161a21');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 42);
+  return c;
+}
+
+// Set the flag's colour map directly (first load / no transition).
+function setFlag(canvas) {
+  const mat = flag.material;
+  const tex = makeTex(canvas);
+  if (mat.map) mat.map.dispose();
+  mat.map = tex;
+  flagUniforms.uMap2.value = tex;
+  flagUniforms.uMix.value = 0;
+  currentFlagCanvas = canvas;
+  applyFabric(mat);
+}
+function applyFabric(mat) {
+  mat.roughness = ui.rough;
+  mat.envMapIntensity = ui.env;
+  mat.normalMap = fabricNormalTex;
+  mat.normalScale.set(ui.strength, ui.strength);   // woven-fabric relief strength
+  mat.needsUpdate = true;
+}
+function refreshFabric() { applyFabric(flag.material); }
+
+function updateLights() {
+  const az = ui.lightAz * Math.PI / 180, el = ui.lightEl * Math.PI / 180, r = 9;
+  key.position.set(r * Math.cos(el) * Math.sin(az), r * Math.sin(el), r * Math.cos(el) * Math.cos(az));
+  key.intensity = ui.lightInt;
+  amb.intensity = ui.ambient;
+}
+
+/* ---- swap: the incoming flag cross-dissolves in (uMix 0→1) while the cloth keeps
+   waving, then becomes the new base map. One mesh — no overlap. ---- */
+let swap = null;
+function startSwap(canvas) {
+  if (swap) finishSwap();
+  swap = { t: 0, dur: 1.0, tex: makeTex(canvas) };
+  flagUniforms.uMap2.value = swap.tex;     // incoming flag
+  flagUniforms.uMix.value = 0;             // cloth keeps waving; only the texture fades
+}
+function finishSwap() {
+  const mat = flag.material;
+  if (mat.map) mat.map.dispose();
+  mat.map = swap.tex;                       // incoming becomes the base map
+  flagUniforms.uMap2.value = swap.tex;
+  flagUniforms.uMix.value = 0;
+  currentFlagCanvas = swap.tex.image;
+  drawThumb('thumb-flag', currentFlagCanvas);
+  swap = null;
+}
+
+/* ---------------------------------------------------------------------------
+   5. Loading a team
+--------------------------------------------------------------------------- */
+let currentCode = null, currentName = '';
+const genstat = document.getElementById('genstat');
+
+async function loadTeam(name, doSwap) {
+  const code = CODE[name];
+  if (!code) return;
+  currentName = name; currentCode = code;
+  document.getElementById('flag-name').textContent = name;
+  genstat.textContent = `loading ${name}…`;
+  try {
+    const canvas = await loadFlagCanvas(code);
+    if (doSwap && flag.material.map) startSwap(canvas);   // sweep the new flag in
+    else { setFlag(canvas); drawThumb('thumb-flag', canvas); }
+    genstat.textContent = `${name} — flag ready`;
+  } catch (err) {
+    console.error(err);
+    genstat.textContent = `couldn't load ${name} (offline?)`;
+  }
+}
+
+function drawThumb(id, src) {
+  const c = document.getElementById(id);
+  if (!src || !c.clientWidth) return;          // panel hidden → defer (redrawn on show)
+  const ctx = c.getContext('2d');
+  const w = c.width = c.clientWidth * devicePixelRatio;
+  const h = c.height = c.clientHeight * devicePixelRatio;
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(src, 0, 0, w, h);
+}
+
+/* ---------------------------------------------------------------------------
+   6. UI state + controls
+--------------------------------------------------------------------------- */
+const ui = {
+  amp: 0.39, speed: 1.8, turb: 0.85, freq: 1.65, droop: 0.36,
+  ratio: 1.6667, pole: false, spin: false, extend: 1.0,
+  rough: 0.65, env: 0.95, strength: 1.1, weaveScale: 0.65,
+  lightAz: 182, lightEl: 16, lightInt: 1.10, ambient: 0.20,
+  hdri: 'studio_small_09', envRot: 0, bgShow: false, bg: '#0e0f13',
+  focal: 21, dof: true, aperture: 10.0, focusMode: 'manual', focusDist: 1.7,
+};
+
+// wind sliders drive shader uniforms live (no rebuild)
+function bindUniform(id, key, uni, fmt) {
+  const el = document.getElementById(id), out = document.getElementById(id + '-v');
+  el.addEventListener('input', () => {
+    ui[key] = parseFloat(el.value);
+    if (out) out.textContent = fmt ? fmt(ui[key]) : ui[key];
+    flagUniforms[uni].value = ui[key];
+  });
+}
+bindUniform('amp', 'amp', 'uAmp', v => v.toFixed(2));
+bindUniform('speed', 'speed', 'uSpeed', v => v.toFixed(1));
+bindUniform('turb', 'turb', 'uTurb', v => v.toFixed(2));
+bindUniform('freq', 'freq', 'uFreq', v => v.toFixed(2));
+bindUniform('droop', 'droop', 'uDroop', v => v.toFixed(2));
+
+// fabric sliders
+function bindFabric(id, key, fmt) {
+  const el = document.getElementById(id), out = document.getElementById(id + '-v');
+  el.addEventListener('input', () => {
+    ui[key] = parseFloat(el.value);
+    if (out) out.textContent = fmt ? fmt(ui[key]) : ui[key];
+    refreshFabric();
+  });
+}
+bindFabric('rough', 'rough', v => v.toFixed(2));
+bindFabric('env', 'env', v => v.toFixed(2));
+bindFabric('strength', 'strength', v => v.toFixed(1));
+
+// weave scale resizes the fabric weave (more/less, bigger/smaller threads)
+{
+  const el = document.getElementById('weaveScale'), out = document.getElementById('weaveScale-v');
+  el.addEventListener('input', () => {
+    ui.weaveScale = parseFloat(el.value); out.textContent = ui.weaveScale.toFixed(2);
+    setWeaveDensity();
+  });
+}
+
+// lighting sliders
+['lightAz', 'lightEl', 'lightInt', 'ambient'].forEach(k => {
+  const el = document.getElementById(k), out = document.getElementById(k + '-v');
+  const deg = k === 'lightAz' || k === 'lightEl';
+  el.addEventListener('input', () => {
+    ui[k] = parseFloat(el.value);
+    out.textContent = deg ? Math.round(ui[k]) + '°' : ui[k].toFixed(2);
+    updateLights();
+  });
+});
+
+document.getElementById('ratio').addEventListener('change', e => {
+  ui.ratio = parseFloat(e.target.value); rebuildGeo();
+});
+{
+  const el = document.getElementById('extend'), out = document.getElementById('extend-v');
+  el.addEventListener('input', () => {
+    ui.extend = parseFloat(el.value); out.textContent = ui.extend.toFixed(1) + '×';
+    rebuildGeo();                                   // new plane + pole-anchor + weave density
+    applyMapExtend(flag.material.map);              // re-centre/repeat the current flag texture
+    applyMapExtend(flagUniforms.uMap2.value);
+  });
+}
+document.getElementById('bg').addEventListener('input', e => {
+  ui.bg = e.target.value; updateBackground();
+});
+document.getElementById('hdri').addEventListener('change', e => {
+  ui.hdri = e.target.value; loadEnv(ui.hdri);
+});
+{
+  const el = document.getElementById('envRot'), out = document.getElementById('envRot-v');
+  el.addEventListener('input', () => {
+    ui.envRot = parseFloat(el.value); out.textContent = Math.round(ui.envRot) + '°';
+    applyEnvRotation();
+  });
+}
+document.querySelectorAll('#bgmode button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#bgmode button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    ui.bgShow = b.dataset.bg === '1';
+    updateBackground();
+  });
+});
+document.querySelectorAll('#pole-mode button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#pole-mode button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    ui.pole = b.dataset.pole === '1';
+    layoutFlag();
+  });
+});
+document.querySelectorAll('#spin-mode button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#spin-mode button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    ui.spin = b.dataset.spin === '1';
+  });
+});
+
+/* ---- camera coordinate read-out / editor / copy ---- */
+const camIds = ['cam-px', 'cam-py', 'cam-pz', 'cam-tx', 'cam-ty', 'cam-tz'];
+const camEls = camIds.map(id => document.getElementById(id));
+const fmt2 = v => (Math.round(v * 100) / 100).toFixed(2);
+function syncCamUI() {
+  if (camEls.some(el => el === document.activeElement)) return;   // don't fight typing
+  const p = camera.position, t = controls.target;
+  const vals = [p.x, p.y, p.z, t.x, t.y, t.z];
+  camEls.forEach((el, i) => { el.value = fmt2(vals[i]); });
+}
+function applyCamUI() {
+  const v = camEls.map(el => parseFloat(el.value) || 0);
+  camera.position.set(v[0], v[1], v[2]);
+  controls.target.set(v[3], v[4], v[5]);
+  controls.update();
+}
+camEls.forEach(el => el.addEventListener('change', applyCamUI));
+
+// focal length (lens) — keep the lens constant across window resizes
+function applyFocal() { camera.setFocalLength(ui.focal); }
+{
+  const el = document.getElementById('focal'), out = document.getElementById('focal-v');
+  el.addEventListener('input', () => {
+    ui.focal = parseFloat(el.value); out.textContent = Math.round(ui.focal) + 'mm';
+    applyFocal();
+  });
+}
+// depth of field
+document.querySelectorAll('#dof-mode button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#dof-mode button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    ui.dof = b.dataset.dof === '1';
+  });
+});
+{
+  const el = document.getElementById('aperture'), out = document.getElementById('aperture-v');
+  el.addEventListener('input', () => {
+    ui.aperture = parseFloat(el.value); out.textContent = ui.aperture.toFixed(1);
+  });
+}
+// focus mode + distance
+const focusDistEl = document.getElementById('focusDist'), focusDistOut = document.getElementById('focusDist-v');
+function markFocusMode(mode) {                    // just flip ui + button highlight
+  ui.focusMode = mode;
+  document.querySelectorAll('#focus-mode button').forEach(x => x.classList.toggle('active', x.dataset.focus === mode));
+}
+function setFocusDist(d) {                        // set the manual distance + reflect in the slider
+  ui.focusDist = d;
+  focusDistEl.value = d.toFixed(1); focusDistOut.textContent = d.toFixed(1);
+}
+document.querySelectorAll('#focus-mode button').forEach(b =>
+  b.addEventListener('click', () => {
+    markFocusMode(b.dataset.focus);
+    if (b.dataset.focus === 'manual') setFocusDist(camera.position.distanceTo(controls.target));  // seed from aim
+  }));
+focusDistEl.addEventListener('input', () => {     // dragging the slider just sets the distance (no reseed)
+  ui.focusDist = parseFloat(focusDistEl.value); focusDistOut.textContent = ui.focusDist.toFixed(1);
+  markFocusMode('manual');
+});
+// double-click the flag → set the focus point (and switch to manual)
+const focusRay = new THREE.Raycaster(), focusNdc = new THREE.Vector2();
+renderer.domElement.addEventListener('dblclick', e => {
+  if (!ui.dof || editMode) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  focusNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  focusRay.setFromCamera(focusNdc, camera);
+  const hit = focusRay.intersectObject(flag, false)[0];
+  if (!hit) return;
+  setFocusDist(camera.position.distanceTo(hit.point));
+  markFocusMode('manual');
+  genstat.textContent = `focus set to ${ui.focusDist.toFixed(1)}`;
+});
+
+document.getElementById('cam-copy').addEventListener('click', () => {
+  const p = camera.position, t = controls.target;
+  const str = `camera.position.set(${fmt2(p.x)}, ${fmt2(p.y)}, ${fmt2(p.z)});\n` +
+              `controls.target.set(${fmt2(t.x)}, ${fmt2(t.y)}, ${fmt2(t.z)});`;
+  const btn = document.getElementById('cam-copy'), label = btn.textContent;
+  navigator.clipboard.writeText(str).then(
+    () => { btn.textContent = '✓ Copied'; setTimeout(() => (btn.textContent = label), 1200); },
+    () => { btn.textContent = '⚠ press Ctrl/Cmd+C'; window.prompt('Copy camera:', str); setTimeout(() => (btn.textContent = label), 1200); }
+  );
+});
+
+/* ---------------------------------------------------------------------------
+   7. Team picker (confederation tabs + search + chips)
+--------------------------------------------------------------------------- */
+const GROUPS = ['All', ...Object.keys(TEAMS)];
+const groupsEl = document.getElementById('teambar-groups');
+const chipsEl = document.getElementById('teambar-chips');
+const searchEl = document.getElementById('teamsearch');
+let activeGroup = 'All';
+
+for (const g of GROUPS) {
+  const b = document.createElement('button');
+  b.className = 'tab' + (g === 'All' ? ' active' : '');
+  b.textContent = g;
+  b.dataset.group = g;
+  b.addEventListener('click', () => {
+    activeGroup = g;
+    document.querySelectorAll('#teambar-groups .tab').forEach(t => t.classList.toggle('active', t.dataset.group === g));
+    searchEl.value = '';
+    filterChips();
+  });
+  groupsEl.appendChild(b);
+}
+
+const chipEls = [];
+for (const [group, list] of Object.entries(TEAMS)) {
+  for (const [name, flag] of list) {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.dataset.team = name;
+    chip.dataset.group = group;
+    chip.innerHTML = `<span class="flag">${flag}</span><span class="nm">${name}</span>`;
+    chip.addEventListener('click', () => selectTeam(name, chip));
+    chipsEl.appendChild(chip);
+    chipEls.push(chip);
+  }
+}
+
+function filterChips() {
+  const q = searchEl.value.trim().toLowerCase();
+  for (const c of chipEls) {
+    const okGroup = activeGroup === 'All' || c.dataset.group === activeGroup;
+    const okSearch = !q || c.dataset.team.toLowerCase().includes(q);
+    c.classList.toggle('chip-hidden', !(okGroup && okSearch));
+  }
+}
+
+function selectTeam(name, chip) {
+  chipEls.forEach(c => c.classList.toggle('active', c === chip));
+  if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  loadTeam(name, true);
+}
+
+searchEl.addEventListener('input', () => {
+  if (searchEl.value.trim()) {
+    activeGroup = 'All';
+    document.querySelectorAll('#teambar-groups .tab').forEach(t => t.classList.toggle('active', t.dataset.group === 'All'));
+  }
+  filterChips();
+});
+
+/* ---------------------------------------------------------------------------
+   8. Export
+--------------------------------------------------------------------------- */
+function downloadCanvas(canvas, name) {
+  canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, 'image/png');
+}
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+document.getElementById('dl-flag').onclick = async () => {
+  if (!currentCode) return;
+  downloadCanvas(await loadFlagCanvas(currentCode), `${slug(currentName)}_flag.png`);
+};
+document.getElementById('thumb-flag').onclick = () => document.getElementById('dl-flag').click();
+
+document.getElementById('dl-render').onclick = () => {
+  renderFrame();                            // ensure the buffer is current (incl. DOF)
+  downloadCanvas(renderer.domElement, `${slug(currentName || 'flag')}_render.png`);
+};
+// the procedural woven-fabric normal map (tileable) — its source canvas is the texture image
+document.getElementById('dl-normal').onclick = () => downloadCanvas(fabricNormalTex.image, 'fabric_normal.png');
+
+// --- minimal store-only ZIP writer (PNGs are already compressed) ---
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = (c >>> 8) ^ CRC_TABLE[(c ^ b[i]) & 0xFF]; return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {
+  const enc = new TextEncoder();
+  const u16 = v => [v & 255, (v >> 8) & 255];
+  const u32 = v => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >> 24) & 255];
+  const parts = [], central = []; let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), data = f.data, crc = crc32(data);
+    const lh = new Uint8Array([...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)]);
+    parts.push(lh, name, data);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), name);
+    offset += lh.length + name.length + data.length;
+  }
+  let cdSize = 0; for (const c of central) cdSize += c.length;
+  const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdSize), ...u32(offset), ...u16(0)]);
+  const all = [...parts, ...central, end];
+  const total = all.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total); let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+  return new Blob([out], { type: 'application/zip' });
+}
+const canvasPng = c => new Promise(res => c.toBlob(async b => res(new Uint8Array(await b.arrayBuffer())), 'image/png'));
+
+document.getElementById('dl-all').onclick = async () => {
+  const btn = document.getElementById('dl-all');
+  btn.disabled = true;
+  try {
+    const teams = Object.values(TEAMS).flat();
+    const files = [];
+    for (let i = 0; i < teams.length; i++) {
+      const [name, , code] = teams[i];
+      genstat.textContent = `packing ${i + 1}/${teams.length}: ${name}`;
+      try {
+        const cv = await loadFlagCanvas(code);
+        files.push({ name: `${slug(name)}.png`, data: await canvasPng(cv) });
+      } catch (e) { console.warn('skip', name, e); }
+      await new Promise(r => requestAnimationFrame(r));
+    }
+    genstat.textContent = 'packing zip…';
+    const blob = makeZip(files);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'worldcup2026_flags.zip';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 6000);
+    genstat.textContent = `exported ${files.length} flags`;
+  } catch (err) {
+    console.error(err); genstat.textContent = 'export failed — see console';
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+/* ---------------------------------------------------------------------------
+   9. Loop
+--------------------------------------------------------------------------- */
+function onResize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  applyFocal();                       // keep the chosen lens constant across aspect changes
+  camera.updateProjectionMatrix();
+  editorCam.aspect = w / h;
+  editorCam.updateProjectionMatrix();
+  composer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+
+window.addEventListener('keydown', e => {
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+  if (e.key.toLowerCase() === 'p') {
+    const hidden = document.getElementById('app').classList.toggle('panel-hidden');
+    requestAnimationFrame(() => { onResize(); if (!hidden) drawThumb('thumb-flag', currentFlagCanvas); });
+  }
+  if (e.key.toLowerCase() === 'c') setEditMode(!editMode);
+  if (e.key === 'Escape' && editMode) setEditMode(false);
+  if (editMode && e.key.toLowerCase() === 'g') setGizmoMode('translate');
+  if (editMode && e.key.toLowerCase() === 'r') setGizmoMode('rotate');
+});
+
+// ---- depth-of-field post-processing (BokehPass) ----
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(Math.min(devicePixelRatio, 2));
+composer.addPass(new RenderPass(scene, camera));
+const bokeh = new BokehPass(scene, camera, { focus: 5.0, aperture: 0.0015, maxblur: 0.01 });
+composer.addPass(bokeh);
+composer.addPass(new OutputPass());     // tone-map + sRGB the linear buffer (else DOF looks dark)
+composer.setSize(view.clientWidth, view.clientHeight);
+
+// BokehPass renders depth with a plain MeshDepthMaterial override that ignores our
+// vertex-shader wave → the blur is computed against a FLAT plane, giving a cut/banded
+// look. Inject the same displacement (derived from position, since the depth material
+// has no uv attribute) so the depth tracks the real cloth surface.
+bokeh.materialDepth.onBeforeCompile = (shader) => {
+  for (const k in flagUniforms) shader.uniforms[k] = flagUniforms[k];
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\n' + WAVE_GLSL)
+    .replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n transformed.z += flagH(vec2(position.x / uW, position.y / uH + 0.5));');
+};
+
+/* ---------------------------------------------------------------------------
+   Camera rig (press C). Detach into a free-orbit "editor" camera so the shot
+   camera becomes a draggable object: a frustum helper + body you reposition with
+   a transform gizmo, and a handle you drag to re-aim it. A live picture-in-
+   picture shows exactly what the shot camera sees while you move it.
+--------------------------------------------------------------------------- */
+let editMode = false;
+const editorCam = new THREE.PerspectiveCamera(45, camera.aspect, 0.05, 500);
+editorCam.position.set(5.5, 3.5, 8);
+const editorControls = new OrbitControls(editorCam, renderer.domElement);
+editorControls.enableDamping = true;
+editorControls.dampingFactor = 0.08;
+editorControls.enabled = false;
+
+// shot-camera stand-in: frustum + a little camera body
+const camHelper = new THREE.CameraHelper(camera);
+const camBody = new THREE.Group();
+{
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x20242e, roughness: 0.5, metalness: 0.6 });
+  const lensMat = new THREE.MeshStandardMaterial({ color: 0x0c0d11, roughness: 0.3, metalness: 0.8 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.34), bodyMat);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.105, 0.16, 24), lensMat);
+  lens.rotation.x = Math.PI / 2; lens.position.z = -0.22;          // lens points down -Z (view dir)
+  camBody.add(box, lens);
+}
+
+// handle marking what the shot camera looks at (drag to re-aim)
+const targetHandle = new THREE.Mesh(
+  new THREE.SphereGeometry(0.07, 20, 14),
+  new THREE.MeshStandardMaterial({ color: 0x36d399, roughness: 0.4, emissive: 0x0c3b2a })
+);
+
+// transform gizmos: one on the camera body, one on the target handle
+const gizmoCam = new TransformControls(editorCam, renderer.domElement);
+const gizmoTarget = new TransformControls(editorCam, renderer.domElement);
+gizmoCam.setSize(0.8); gizmoTarget.setSize(0.7);
+gizmoCam.setMode('translate'); gizmoCam.setSpace('world');
+gizmoTarget.setMode('translate'); gizmoTarget.setSpace('world');
+// gizmo for the flag itself (move / rotate the whole flag + pole assembly)
+const gizmoFlag = new TransformControls(editorCam, renderer.domElement);
+gizmoFlag.setSize(0.9);
+gizmoFlag.setMode('translate'); gizmoFlag.setSpace('world');
+gizmoCam.attach(camBody);
+gizmoTarget.attach(targetHandle);
+gizmoFlag.attach(flagPivot);
+for (const g of [gizmoCam, gizmoTarget, gizmoFlag]) {
+  g.addEventListener('dragging-changed', e => { editorControls.enabled = !e.value && editMode; });
+}
+function setGizmoMode(mode) {                     // 'translate' | 'rotate' — for the camera + flag gizmos
+  gizmoCam.setMode(mode);  gizmoCam.setSpace(mode === 'rotate' ? 'local' : 'world');
+  gizmoFlag.setMode(mode); gizmoFlag.setSpace(mode === 'rotate' ? 'local' : 'world');
+}
+
+let camDist = 5;                                 // distance camera → target (keeps the aim coherent)
+const _fwd = new THREE.Vector3();
+const aimFromQuaternion = () => {                // place the target in front of the camera at camDist
+  _fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  controls.target.copy(camera.position).addScaledVector(_fwd, camDist);
+};
+// move (translate) the body → reposition the camera; rotate the body → reorient it.
+gizmoCam.addEventListener('objectChange', () => {
+  if (gizmoCam.mode === 'rotate') camera.quaternion.copy(camBody.quaternion);
+  else camera.position.copy(camBody.position);
+  aimFromQuaternion();                           // target follows so DOF / "copy camera" stay sensible
+});
+// drag the handle → re-aim the camera at that point
+gizmoTarget.addEventListener('objectChange', () => {
+  controls.target.copy(targetHandle.position);
+  camDist = camera.position.distanceTo(controls.target);
+  camera.lookAt(controls.target);
+  camBody.quaternion.copy(camera.quaternion);
+});
+
+const editObjects = [camHelper, camBody, targetHandle,
+  gizmoCam.getHelper(), gizmoTarget.getHelper(), gizmoFlag.getHelper()];
+editObjects.forEach(o => { o.visible = false; scene.add(o); });
+const setEditVisible = v => editObjects.forEach(o => (o.visible = v));
+
+function setEditMode(on) {
+  editMode = on;
+  document.getElementById('app').classList.toggle('editing', on);
+  controls.enabled = !on;                 // shot orbit only outside the rig
+  editorControls.enabled = on;
+  gizmoCam.enabled = on; gizmoTarget.enabled = on; gizmoFlag.enabled = on;
+  setEditVisible(on);
+  if (on) {                               // sync the stand-ins to the live camera/target
+    camDist = camera.position.distanceTo(controls.target);
+    camBody.position.copy(camera.position);
+    camBody.quaternion.copy(camera.quaternion);
+    targetHandle.position.copy(controls.target);
+  }
+}
+
+function renderFrame() {
+  const w = view.clientWidth, h = view.clientHeight;
+  if (editMode) {
+    // mirror the stand-ins to the live camera/target (camera orientation is now free)
+    camBody.position.copy(camera.position);
+    camBody.quaternion.copy(camera.quaternion);
+    targetHandle.position.copy(controls.target);
+    camHelper.update();
+
+    // 1) full viewport from the free editor camera (rig visible)
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, w, h);
+    renderer.render(scene, editorCam);
+
+    // 2) picture-in-picture of the actual shot (rig hidden, matches view aspect)
+    setEditVisible(false);
+    const pw = Math.round(w * 0.27), ph = Math.round(pw * h / w);
+    const px = w - pw - 14, py = h - ph - 14;          // top-right (WebGL y is bottom-up)
+    renderer.setScissorTest(true);
+    renderer.setViewport(px - 2, py - 2, pw + 4, ph + 4);   // accent border
+    renderer.setScissor(px - 2, py - 2, pw + 4, ph + 4);
+    renderer.setClearColor(0x5b8cff, 1); renderer.clear(true, false, false);
+    renderer.setClearColor(0x000000, 1);
+    renderer.setViewport(px, py, pw, ph);
+    renderer.setScissor(px, py, pw, ph);
+    renderer.render(scene, camera);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, w, h);
+    setEditVisible(true);
+    return;
+  }
+  if (ui.dof) {
+    bokeh.uniforms.focus.value = ui.focusMode === 'manual'
+      ? ui.focusDist : camera.position.distanceTo(controls.target);
+    bokeh.uniforms.aperture.value = ui.aperture * 0.0006;                       // strength of the blur
+    composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
+}
+
+const clock = new THREE.Clock();
+const easeOutCubic = k => 1 - Math.pow(1 - k, 3);
+function animate() {
+  requestAnimationFrame(animate);
+  // clamp dt so a single slow frame (e.g. a texture upload hitch on flag change)
+  // can't blow through the cross-dissolve / wave in one step
+  const dt = Math.min(clock.getDelta(), 0.05);
+  // the wave keeps running through a fade (smoother); only the texture cross-dissolves
+  flagUniforms.uTime.value += dt;
+
+  if (ui.spin) flagGroup.rotation.y = Math.sin(flagUniforms.uTime.value * 0.25) * 0.5;
+  else flagGroup.rotation.y += (0 - flagGroup.rotation.y) * Math.min(1, dt * 4);
+
+  let shock = 0;
+  if (swap) {
+    swap.t += dt / swap.dur;
+    const k = Math.min(1, swap.t);
+    flagUniforms.uMix.value = k * k * k;     // ease-in (accelerating) wipe
+    shock = Math.min(1, k / 0.12);           // ramp the shock in, then it rides the edge off-screen
+    if (swap.t >= 1) finishSwap();
+  }
+  flagUniforms.uShock.value = shock;         // the only swap-time wave change is the travelling bump
+  flagUniforms.uAmp.value = ui.amp;          // (no global swell — that felt laggy)
+  flagUniforms.uSpeed.value = ui.speed;
+  controls.update();
+  if (editMode) editorControls.update();
+  syncCamUI();
+  renderFrame();
+}
+animate();
+
+/* ---------------------------------------------------------------------------
+   10. Boot
+--------------------------------------------------------------------------- */
+layoutFlag();
+setWeaveDensity();
+updateLights();
+updateBackground();
+loadEnv(ui.hdri);
+// apply the default lens + framing
+applyFocal();                                   // ui.focal = 21mm
+camera.position.set(-0.78, -1.41, 1.00);
+controls.target.set(0.02, 0.13, -0.23);
+controls.update();
+// show a neutral cloth immediately, then wipe the (random) first flag in over it
+setFlag(makePlaceholderCanvas());
+const startChip = chipEls[Math.floor(Math.random() * chipEls.length)];
+selectTeam(startChip.dataset.team, startChip);
+</script>
+</body>
+</html>
